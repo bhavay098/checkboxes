@@ -10,13 +10,18 @@ import { publisher, subscriber, redis } from "./src/redis-connection.js";
 async function main() {
   const PORT = process.env.PORT ?? 8000;
 
-  await initializeCheckboxState();
+  try {
+    await initializeCheckboxState();
+  } catch (error) {
+    console.error("Failed to initialize checkbox state:", error);
+    throw error;
+  }
 
   const server = http.createServer(app);
 
   const io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173",
+      origin: process.env.CLIENT_URL,
     },
   });
 
@@ -24,10 +29,14 @@ async function main() {
 
   subscriber.on("message", async (channel, message) => {
     if (channel === "internal-server:checkbox:change") {
-      const { index, checked } = JSON.parse(message);
+      try {
+        const { index, checked } = JSON.parse(message);
 
-      await updateCheckbox(index, checked);
-      io.emit("server:checkbox:change", { index, checked });
+        await updateCheckbox(index, checked);
+        io.emit("server:checkbox:change", { index, checked });
+      } catch (error) {
+        console.error("Failed to process checkbox update message:", error);
+      }
     }
   });
 
@@ -38,32 +47,39 @@ async function main() {
     console.log(`Socket connected`, { id: socket.id });
 
     socket.on("client:checkbox:change", async (data) => {
-      console.log(`[Socket:${socket.id}:client:checkbox:change]`, data);
+      // console.log(`[Socket:${socket.id}:client:checkbox:change]`, data);
 
-      const currentTime = Date.now();
+      try {
+        const currentTime = Date.now();
 
-      const lastOperationTime = Number(
-        (await redis.get(`rate-limit:${socket.id}`)) ?? 0,
-      );
+        const lastOperationTime = Number(
+          (await redis.get(`rate-limit:${socket.id}`)) ?? 0,
+        );
 
-      if (currentTime - lastOperationTime < COOLDOWN_MS) {
-        socket.emit("server:rate-limit", {
-          message: "Please wait 2 seconds before changing again.",
+        if (currentTime - lastOperationTime < COOLDOWN_MS) {
+          socket.emit("server:rate-limit", {
+            message: "Please wait 2 seconds before changing again.",
+          });
+          return;
+        }
+
+        await redis.set(
+          `rate-limit:${socket.id}`,
+          String(currentTime),
+          "PX",
+          COOLDOWN_MS,
+        );
+
+        await publisher.publish(
+          "internal-server:checkbox:change",
+          JSON.stringify(data),
+        );
+      } catch (error) {
+        console.error("Failed to handle checkbox change:", error);
+        socket.emit("server:error", {
+          message: "Unable to update checkbox state right now.",
         });
-        return;
       }
-
-      await redis.set(
-        `rate-limit:${socket.id}`,
-        String(currentTime),
-        "PX",
-        COOLDOWN_MS,
-      );
-
-      await publisher.publish(
-        "internal-server:checkbox:change",
-        JSON.stringify(data),
-      );
     });
 
     socket.on("disconnect", () => {
@@ -76,4 +92,7 @@ async function main() {
   });
 }
 
-main();
+main().catch((error) => {
+  console.error("Server failed to start:", error);
+  process.exit(1);
+});

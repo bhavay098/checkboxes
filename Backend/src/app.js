@@ -7,15 +7,20 @@ const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
   }),
 );
 
 app.get("/health", (req, res) => res.json({ healthy: true }));
 
 app.get("/checkboxes", async (req, res) => {
-  const checkboxes = await getCheckboxState();
-  res.json({ checkboxes });
+  try {
+    const checkboxes = await getCheckboxState();
+    res.json({ checkboxes });
+  } catch (error) {
+    console.error("Failed to load checkbox state:", error);
+    res.status(500).json({ error: "Failed to load checkbox state" });
+  }
 });
 
 export default app;

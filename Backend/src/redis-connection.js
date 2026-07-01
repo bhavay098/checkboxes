@@ -2,8 +2,8 @@ import Redis from "ioredis";
 
 function createRedisConnection() {
   const redis = new Redis({
-    host: "localhost",
-    port: 6379,
+    host: process.env.REDIS_URL,
+    port: process.env.REDIS_PORT,
   });
 
   redis.on("error", (error) => {

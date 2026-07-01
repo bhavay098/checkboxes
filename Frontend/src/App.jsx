@@ -15,7 +15,9 @@ function App() {
   useEffect(() => {
     const fetchState = async () => {
       try {
-        const response = await fetch("http://localhost:8000/checkboxes");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/checkboxes`,
+        );
 
         if (!response.ok) {
           throw new Error("Failed to fetch");
@@ -62,9 +64,16 @@ function App() {
 
     socket.on("server:rate-limit", handleRateLimit);
 
+    const handleServerError = ({ message }) => {
+      setAlertMessage(message);
+    };
+
+    socket.on("server:error", handleServerError);
+
     return () => {
       socket.off("server:checkbox:change", handleCheckboxChange);
       socket.off("server:rate-limit", handleRateLimit);
+      socket.off("server:error", handleServerError);
       socket.disconnect();
       clearTimeout(rateLimitTimerId);
     };
