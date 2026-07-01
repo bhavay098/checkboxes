@@ -1,10 +1,7 @@
 import Redis from "ioredis";
 
 function createRedisConnection() {
-  const redis = new Redis({
-    host: process.env.REDIS_URL,
-    port: process.env.REDIS_PORT,
-  });
+  const redis = new Redis(process.env.REDIS_URL);
 
   redis.on("error", (error) => {
     console.error("Redis error:", error);
@@ -13,7 +10,7 @@ function createRedisConnection() {
   return redis;
 }
 
-export const redis = createRedisConnection()
+export const redis = createRedisConnection();
 
 export const publisher = createRedisConnection();
 
